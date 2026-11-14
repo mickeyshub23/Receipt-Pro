@@ -1,0 +1,92 @@
+import { Router } from 'express';
+import multer from 'multer';
+import { env } from '../config/env.js';
+import { supabase } from '../lib/supabase.js';
+import { validate } from '../middleware/validate.js';
+import { receiptPayloadSchema } from '../lib/schemas.js';
+import { getOrCreateReceipt, signedImageUrl } from '../lib/receipts.js';
+
+const upload = multer({ limits: { fileSize: 2 * 1024 * 1024 } });
+
+const router = Router();
+
+router.post('/check', validate(receiptPayloadSchema, 'body'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { receipt } = await getOrCreateReceipt(userId, req.body);
+    res.status(200).json({ paid: receipt.status === 'paid', receipt: { id: receipt.id, slug: receipt.slug } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not check receipt status.' } });
+  }
+});
+
+router.post('/:id/image', upload.single('image'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Image file is required.' } });
+    }
+    const { data: receipt, error: rerr } = await supabase
+      .from('receipts')
+      .select('id, user_id, status, image_path')
+      .eq('id', id)
+      .maybeSingle();
+    if (rerr) throw rerr;
+    if (!receipt) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receipt not found.' } });
+    if (receipt.user_id !== userId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not your receipt.' } });
+    if (receipt.status !== 'paid') return res.status(403).json({ error: { code: 'NOT_PAID', message: 'Receipt is not paid.' } });
+
+    const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+    const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
+    const path = `${userId}/${id}.${ext}`;
+
+    const { error: uerr } = await supabase.storage
+      .from(env.SUPABASE_STORAGE_BUCKET)
+      .upload(path, req.file.buffer, { contentType, upsert: true });
+    if (uerr) throw uerr;
+
+    const { error: uperr } = await supabase
+      .from('receipts')
+      .update({ image_path: path })
+      .eq('id', id);
+    if (uperr) throw uperr;
+
+    res.status(200).json({ ok: true, path });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Image upload failed.' } });
+  }
+});
+
+router.get('/', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { style, limit = 20, cursor } = req.query;
+    let query = supabase
+      .from('receipts')
+      .select('id, style, theme, store_name, total, currency, image_path, created_at')
+      .eq('user_id', userId)
+      .eq('status', 'paid')
+      .order('created_at', { ascending: false })
+      .limit(Number(limit));
+    if (style === 'business' || style === 'invoice') query = query.eq('style', style);
+    if (cursor) query = query.lt('created_at', cursor);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const nextCursor = data.length === Number(limit) ? data[data.length - 1].created_at : null;
+    const rows = await Promise.all(
+      data.map(async (r) => ({
+        ...r,
+        image_url: await signedImageUrl(r.image_path),
+      })),
+    );
+
+    res.status(200).json({ receipts: rows, nextCursor });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not load history.' } });
+  }
+});
+
+export default router;
