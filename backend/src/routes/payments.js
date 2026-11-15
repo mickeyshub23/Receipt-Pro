@@ -6,6 +6,8 @@ import { validate } from '../middleware/validate.js';
 import { receiptPayloadSchema } from '../lib/schemas.js';
 import { logger } from '../lib/logger.js';
 
+const router = Router();
+
 function isValidEmail(e) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 }
