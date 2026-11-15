@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { supabase } from '../lib/supabase.js';
 import { paystackVerifySignature } from '../lib/paystack.js';
 import { markReceiptPaid } from '../lib/receipts.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -56,6 +57,11 @@ router.post('/paystack', async (req, res) => {
     await markPaid(reference, event.data);
   } catch (err) {
     // Always answer 200 for valid events so Paystack does not retry forever.
+    // Log the full stack for debugging — webhook data is never echoed to the caller.
+    logger.error(
+      { err, req: { method: req.method, path: req.path }, reference },
+      'Webhook markPaid failed',
+    );
   }
 
   return res.status(200).json({ ok: true });

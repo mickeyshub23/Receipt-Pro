@@ -12,6 +12,7 @@ import publicReceipts from './routes/publicReceipts.js';
 import { globalLimiter, paymentLimiter, publicLimiter } from './middleware/rateLimit.js';
 import auth from './middleware/auth.js';
 import errorHandler from './middleware/errorHandler.js';
+import { requestLogger } from './middleware/requestLogger.js';
 
 const app = express();
 
@@ -36,6 +37,8 @@ app.use(
 );
 
 app.use(globalLimiter);
+
+app.use(requestLogger);
 
 app.use('/health', health);
 app.use('/api/config', config);

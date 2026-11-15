@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { computeFingerprint } from './fingerprint.js';
 import { makeSlug } from './slug.js';
+import { logger } from './logger.js';
 
 export function totalOf(items, style) {
   return (items || []).reduce((sum, i) => {
@@ -69,6 +70,12 @@ export async function signedImageUrl(path, expiresIn = 600) {
   const { data, error } = await supabase.storage
     .from(process.env.SUPABASE_STORAGE_BUCKET || 'receipt-images')
     .createSignedUrl(path, expiresIn);
-  if (error) return null;
+  if (error) {
+    logger.error(
+      { error, path, expiresIn },
+      'Supabase storage signedUrl creation failed',
+    );
+    return null;
+  }
   return data.signedUrl;
 }

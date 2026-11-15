@@ -1,19 +1,20 @@
 import app from './app.js';
+import { logger } from './lib/logger.js';
 
 const PORT = Number(process.env.PORT || 10000);
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Receipt Pro backend listening on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
+  logger.info(`Receipt Pro backend listening on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
 });
 
 function gracefulShutdown(signal) {
-  console.log(`Received ${signal}, shutting down gracefully...`);
+  logger.info(`Received ${signal}, shutting down gracefully...`);
   server.close(() => {
-    console.log('HTTP server closed.');
+    logger.info('HTTP server closed.');
     process.exit(0);
   });
   setTimeout(() => {
-    console.log('Forced shutdown.');
+    logger.error('Forced shutdown.');
     process.exit(1);
   }, 10_000).unref();
 }

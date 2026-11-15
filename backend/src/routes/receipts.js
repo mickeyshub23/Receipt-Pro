@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase.js';
 import { validate } from '../middleware/validate.js';
 import { receiptPayloadSchema } from '../lib/schemas.js';
 import { getOrCreateReceipt, signedImageUrl } from '../lib/receipts.js';
+import { logger } from '../lib/logger.js';
 
 const upload = multer({ limits: { fileSize: 2 * 1024 * 1024 } });
 
@@ -16,6 +17,7 @@ router.post('/check', validate(receiptPayloadSchema, 'body'), async (req, res) =
     const { receipt } = await getOrCreateReceipt(userId, req.body);
     res.status(200).json({ paid: receipt.status === 'paid', receipt: { id: receipt.id, slug: receipt.slug } });
   } catch (err) {
+    logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id } }, 'Receipt check failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not check receipt status.' } });
   }
 });
@@ -54,6 +56,7 @@ router.post('/:id/image', upload.single('image'), async (req, res) => {
 
     res.status(200).json({ ok: true, path });
   } catch (err) {
+    logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id, receiptId: req.params.id } }, 'Image upload to Supabase Storage failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Image upload failed.' } });
   }
 });
@@ -85,6 +88,7 @@ router.get('/', async (req, res) => {
 
     res.status(200).json({ receipts: rows, nextCursor });
   } catch (err) {
+    logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id } }, 'Receipt history load failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not load history.' } });
   }
 });

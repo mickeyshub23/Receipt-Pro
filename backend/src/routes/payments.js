@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { getOrCreateReceipt, markReceiptPaid } from '../lib/receipts.js';
 import { validate } from '../middleware/validate.js';
 import { receiptPayloadSchema } from '../lib/schemas.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -73,6 +74,7 @@ router.post(
         receipt: { id: receipt.id, slug: receipt.slug },
       });
     } catch (err) {
+      logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id } }, 'Payment initialization failed');
       res.status(500).json({ error: { code: 'PAYMENT_ERROR', message: err.message || 'Could not initialize payment.' } });
     }
   },
@@ -121,6 +123,7 @@ router.get('/verify', async (req, res) => {
 
     return res.status(200).json({ paid: true, receipt_id: payment.receipt_id });
   } catch (err) {
+    logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id, reference: req.query.reference } }, 'Payment verification failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Verification failed.' } });
   }
 });

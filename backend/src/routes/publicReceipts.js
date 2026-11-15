@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { signedImageUrl } from '../lib/receipts.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -27,6 +28,7 @@ router.get('/:slug', async (req, res) => {
       image_url: imageUrl,
     });
   } catch (err) {
+    logger.error({ err, req: { method: req.method, path: req.path, slug: req.params.slug } }, 'Public receipt load failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not load receipt.' } });
   }
 });
