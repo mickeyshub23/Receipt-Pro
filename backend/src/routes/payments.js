@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { Router } from 'express';
 import { env } from '../config/env.js';
 import { supabase } from '../lib/supabase.js';
