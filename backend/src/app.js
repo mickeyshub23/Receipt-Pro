@@ -10,7 +10,6 @@ import payments from './routes/payments.js';
 import webhooks from './routes/webhooks.js';
 import publicReceipts from './routes/publicReceipts.js';
 import { globalLimiter, paymentLimiter, publicLimiter } from './middleware/rateLimit.js';
-import auth from './middleware/auth.js';
 import errorHandler from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 
@@ -61,7 +60,7 @@ app.use(requestLogger);
 app.use('/health', health);
 app.use('/api/config', config);
 app.use('/api/webhooks', webhooks);
-app.use('/api/payments', paymentLimiter, auth, payments);
+app.use('/api/payments', paymentLimiter, payments);
 app.use('/api/receipts', receipts);
 app.use('/api/public', publicLimiter, publicReceipts);
 

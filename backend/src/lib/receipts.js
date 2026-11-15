@@ -12,25 +12,25 @@ export function totalOf(items, style) {
   }, 0);
 }
 
-export async function findReceipt(userId, fingerprint) {
+export async function findReceipt(deviceId, fingerprint) {
   const { data, error } = await supabase
     .from('receipts')
     .select('*')
-    .eq('user_id', userId)
+    .eq('device_id', deviceId)
     .eq('fingerprint', fingerprint)
     .maybeSingle();
   if (error) throw error;
   return data;
 }
 
-export async function createReceipt(userId, payload, fingerprint, deviceId) {
+export async function createReceipt(deviceId, payload, fingerprint) {
   const slug = makeSlug(24);
   const imageUrl = payload.image_url || null;
   const { data, error } = await supabase
     .from('receipts')
     .insert({
-      user_id: userId,
-      device_id: deviceId || null,
+      device_id: deviceId,
+      user_id: deviceId,
       style: payload.style === 2 ? 'invoice' : 'business',
       theme: payload.theme,
       fingerprint,
@@ -48,18 +48,16 @@ export async function createReceipt(userId, payload, fingerprint, deviceId) {
   return data;
 }
 
-export async function getOrCreateReceipt(userId, payload, deviceId) {
+export async function getOrCreateReceipt(deviceId, payload) {
   const fingerprint = computeFingerprint(payload);
-  let receipt = await findReceipt(userId, fingerprint);
+  let receipt = await findReceipt(deviceId, fingerprint);
   const total = totalOf(payload.items, payload.style);
   if (!receipt) {
-    receipt = await createReceipt(userId, payload, fingerprint, deviceId);
+    receipt = await createReceipt(deviceId, payload, fingerprint);
     return { receipt, fingerprint };
   }
   // Refresh total + currency on every check so old rows never show ₦0.00.
-  // If the row predates device tracking, stamp it now so it appears in history.
   const patch = { total, currency: payload.cur || '₦', payload };
-  if (!receipt.device_id && deviceId) patch.device_id = deviceId;
   const { error: uerr } = await supabase
     .from('receipts')
     .update(patch)
@@ -68,19 +66,27 @@ export async function getOrCreateReceipt(userId, payload, deviceId) {
   receipt.total = total;
   receipt.currency = payload.cur || '₦';
   receipt.payload = payload;
-  if (!receipt.device_id && deviceId) receipt.device_id = deviceId;
   return { receipt, fingerprint };
 }
 
-export async function markReceiptPaid(receiptId) {
+export async function markReceiptPaid(receiptId, deviceId) {
   const { data, error } = await supabase
+    .from('receipts')
+    .select('device_id')
+    .eq('id', receiptId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || data.device_id !== deviceId) {
+    throw new Error('Receipt does not belong to this device.');
+  }
+  const { data: updated, error: uerr } = await supabase
     .from('receipts')
     .update({ status: 'paid' })
     .eq('id', receiptId)
     .select('*')
     .single();
-  if (error) throw error;
-  return data;
+  if (uerr) throw uerr;
+  return updated;
 }
 
 export async function setImageUrl(receiptId, imageUrl) {

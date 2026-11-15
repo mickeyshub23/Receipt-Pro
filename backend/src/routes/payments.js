@@ -8,6 +8,15 @@ import { logger } from '../lib/logger.js';
 
 const router = Router();
 
+function requireDeviceId(req, res, next) {
+  const deviceId = req.headers['x-device-id'];
+  if (!deviceId) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'x-device-id header required.' } });
+  }
+  req.deviceId = deviceId;
+  next();
+}
+
 function paystackUrl(path) {
   return `https://api.paystack.co${path}`;
 }
@@ -19,13 +28,13 @@ function uniqueRef(receiptId) {
 
 router.post(
   '/initialize',
+  requireDeviceId,
   validate(receiptPayloadSchema, 'body'),
   async (req, res) => {
     try {
-      const userId = req.user.id;
-      const deviceId = req.headers['x-device-id'];
+      const deviceId = req.deviceId;
       const payload = req.body;
-      const { receipt, fingerprint } = await getOrCreateReceipt(userId, payload, deviceId);
+      const { receipt, fingerprint } = await getOrCreateReceipt(deviceId, payload, deviceId);
 
       const amountKobo = env.RECEIPT_PRICE_KOBO;
       const reference = uniqueRef(receipt.id);
@@ -33,7 +42,7 @@ router.post(
 
       // create payment row
       const { error: perr } = await supabase.from('payments').insert({
-        user_id: userId,
+        user_id: deviceId,
         receipt_id: receipt.id,
         reference,
         amount_kobo: amountKobo,
@@ -46,12 +55,12 @@ router.post(
       if (perr) throw perr;
 
       const body = JSON.stringify({
-        email: req.user.email || `${userId}@receiptpro.local`,
+        email: `${deviceId}@receiptpro.local`,
         amount: amountKobo,
         currency: env.PAYSTACK_CURRENCY,
         reference,
         callback_url: env.PAYSTACK_CALLBACK_URL,
-        metadata: { receipt_id: receipt.id, user_id: userId },
+        metadata: { receipt_id: receipt.id, user_id: deviceId },
       });
 
       const resp = await fetch(paystackUrl('/transaction/initialize'), {
@@ -76,7 +85,7 @@ router.post(
         receipt: { id: receipt.id, slug: receipt.slug },
       });
     } catch (err) {
-      logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id } }, 'Payment initialization failed');
+      logger.error({ err, req: { method: req.method, path: req.path, deviceId: req.deviceId } }, 'Payment initialization failed');
       res.status(500).json({ error: { code: 'PAYMENT_ERROR', message: err.message || 'Could not initialize payment.' } });
     }
   },
@@ -84,21 +93,36 @@ router.post(
 
 router.get('/verify', async (req, res) => {
   try {
-    const userId = req.user.id;
     const { reference } = req.query;
     if (!reference || typeof reference !== 'string') {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'reference is required.' } });
     }
 
-    const { data: payment, error: perr } = await supabase
+const { data: payment, error: perr } = await supabase
       .from('payments')
       .select('*')
       .eq('reference', reference)
+      .eq('user_id', deviceId)
       .maybeSingle();
     if (perr) throw perr;
-    if (!payment || payment.user_id !== userId) {
+    if (!payment) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Payment not found.' } });
     }
+
+    // Only allow verification if the payment belongs to a receipt owned by this device.
+    const { data: receipt, error: rer } = await supabase
+      .from('receipts')
+      .select('status, device_id')
+      .eq('id', payment.receipt_id)
+      .maybeSingle();
+    if (rer) throw rer;
+    if (!receipt) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receipt not found.' } });
+    }
+    if (receipt.device_id !== req.deviceId) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not your receipt.' } });
+    }
+
     if (payment.status === 'success') {
       return res.status(200).json({ paid: true, receipt_id: payment.receipt_id, idempotent: true });
     }
@@ -121,11 +145,11 @@ router.get('/verify', async (req, res) => {
 
     const now = new Date().toISOString();
     await supabase.from('payments').update({ status: 'success', verified_at: now, raw: tx }).eq('id', payment.id);
-    await markReceiptPaid(payment.receipt_id);
+    await markReceiptPaid(payment.receipt_id, deviceId);
 
     return res.status(200).json({ paid: true, receipt_id: payment.receipt_id });
   } catch (err) {
-    logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id, reference: req.query.reference } }, 'Payment verification failed');
+    logger.error({ err, req: { method: req.method, path: req.path, deviceId: req.deviceId }, reference: req.query.reference }, 'Payment verification failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Verification failed.' } });
   }
 });
