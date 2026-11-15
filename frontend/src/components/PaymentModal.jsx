@@ -4,7 +4,7 @@ const PAY_ACCT = '08038303372';
 const PAY_BANK = '';
 const PAY_NAME = 'Charis Digital Skill Academy';
 
-export default function PaymentModal({ open, amountLabel, expiresAt, payUrl, onClose, onStartAgain, status, error }) {
+export default function PaymentModal({ open, amountLabel, expiresAt, payUrl, onClose, onStartAgain, status, error, email, onChangeEmail }) {
   const [left, setLeft] = useState(300);
   const timer = useRef(null);
 
@@ -72,6 +72,14 @@ export default function PaymentModal({ open, amountLabel, expiresAt, payUrl, onC
               </div>
               <div>{PAY_NAME}</div>
             </div>
+
+            <div style={{ marginTop: 12, fontSize: 13, color: '#555', fontStyle: 'italic' }}>
+              Email: <b>{email || 'not set'}</b>
+              <button type="button" onClick={onChangeEmail} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#007bff', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}>
+                Change
+              </button>
+            </div>
+
             <div className="tm">
               <span>Time left to pay</span>
               <b>{mm}:{ss}</b>

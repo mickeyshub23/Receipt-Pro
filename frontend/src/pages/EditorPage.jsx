@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import ItemsEditor from '../components/ItemsEditor';
 import PreviewOverlay from '../components/PreviewOverlay';
 import PaymentModal from '../components/PaymentModal';
+import EmailModal from '../components/EmailModal';
 import HistoryWindow from '../components/HistoryWindow';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
@@ -11,6 +12,7 @@ import { captureElement, downloadCanvasPng, canvasToPdf, canvasToJpegBlob } from
 import { DEFAULT_THEME } from '../lib/themes';
 
 const PUBLIC_SITE = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin;
+const EMAIL_KEY = 'rp_email';
 
 function initialState(style) {
   return {
@@ -30,6 +32,14 @@ function initialState(style) {
   };
 }
 
+function getSavedEmail() {
+  try {
+    return window.localStorage.getItem(EMAIL_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
 export default function EditorPage({ style, onHome }) {
   const { session, displayName, signOut, user } = useAuth();
   const token = session?.access_token;
@@ -42,8 +52,11 @@ export default function EditorPage({ style, onHome }) {
   const [toast, setToast] = useState('');
   const [publicUrl, setPublicUrl] = useState('');
   const [verifiedReceipt, setVerifiedReceipt] = useState(null);
-  const [verifyState, setVerifyState] = useState('idle'); // 'idle' | 'checking' | 'error'
+  const [verifyState, setVerifyState] = useState('idle');
   const [verifyError, setVerifyError] = useState('');
+  const [savedEmail, setSavedEmail] = useState(() => getSavedEmail());
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailPendingKind, setEmailPendingKind] = useState('pdf');
   const receiptRef = useRef(null);
   const pendingKind = useRef('pdf');
   const [modal, setModal] = useState({ open: false, amountLabel: '₦100', expiresAt: '', payUrl: '', status: 'idle', error: '' });
@@ -62,7 +75,7 @@ export default function EditorPage({ style, onHome }) {
   }
 
   function payload() {
-    return {
+    const base = {
       style,
       theme,
       logo: fields.logo,
@@ -78,6 +91,8 @@ export default function EditorPage({ style, onHome }) {
       cur: fields.cur,
       items: items.map((i) => ({ q: Number(i.q) || 0, d: String(i.d || ''), p: Number(i.p) || 0, x: Number(i.x) || 0 })),
     };
+    if (savedEmail) base.email = savedEmail;
+    return base;
   }
 
   async function doCaptureAndDeliver(kind, receipt) {
@@ -105,6 +120,20 @@ export default function EditorPage({ style, onHome }) {
     } catch (e) {
       setToast('Could not create the file. Check your internet connection and try again.');
     }
+  }
+
+  async function initializePaymentWith(email) {
+    const init = await api.initializePayment({ ...payload(), email }, token, deviceId);
+    setModal({
+      open: true,
+      amountLabel: '₦100',
+      expiresAt: init.expires_at,
+      payUrl: init.authorization_url,
+      status: 'idle',
+      error: '',
+      email,
+    });
+    setToast('');
   }
 
   async function handleDownload(kind) {
@@ -136,17 +165,14 @@ export default function EditorPage({ style, onHome }) {
         return;
       }
 
-      // Unpaid receipt: open Paystack.
-      const init = await api.initializePayment(payload(), token, deviceId);
-      setModal({
-        open: true,
-        amountLabel: '₦100',
-        expiresAt: init.expires_at,
-        payUrl: init.authorization_url,
-        status: 'idle',
-        error: '',
-      });
-      setToast('');
+      // Unpaid receipt: require an email for Paystack before opening payment.
+      if (!savedEmail) {
+        setEmailPendingKind(kind);
+        setEmailModalOpen(true);
+        return;
+      }
+
+      await initializePaymentWith(savedEmail);
     } catch (e) {
       setVerifyState('error');
       setVerifyError('Couldn&apos;t verify payment.');
@@ -154,17 +180,24 @@ export default function EditorPage({ style, onHome }) {
     }
   }
 
+  async function onEmailConfirmed(email) {
+    setSavedEmail(email);
+    setEmailModalOpen(false);
+    pendingKind.current = emailPendingKind;
+    try {
+      await initializePaymentWith(email);
+    } catch (e) {
+      setToast(e.message || 'Could not start payment.');
+    }
+  }
+
+  function changeEmail() {
+    setEmailModalOpen(true);
+  }
+
   async function startAgain() {
     try {
-      const init = await api.initializePayment(payload(), token, deviceId);
-      setModal({
-        open: true,
-        amountLabel: '₦100',
-        expiresAt: init.expires_at,
-        payUrl: init.authorization_url,
-        status: 'idle',
-        error: '',
-      });
+      await initializePaymentWith(savedEmail);
     } catch (e) {
       setModal((m) => ({ ...m, status: 'failed', error: e.message }));
     }
@@ -281,9 +314,13 @@ export default function EditorPage({ style, onHome }) {
         payUrl={modal.payUrl}
         status={modal.status}
         error={modal.error}
+        email={modal.email}
         onClose={() => setModal((m) => ({ ...m, open: false }))}
         onStartAgain={startAgain}
+        onChangeEmail={changeEmail}
       />
+
+      <EmailModal open={emailModalOpen} onConfirm={onEmailConfirmed} onClose={() => setEmailModalOpen(false)} />
 
       <HistoryWindow open={showHistory} token={token} onClose={() => setShowHistory(false)} />
 

@@ -6,7 +6,9 @@ import { validate } from '../middleware/validate.js';
 import { receiptPayloadSchema } from '../lib/schemas.js';
 import { logger } from '../lib/logger.js';
 
-const router = Router();
+function isValidEmail(e) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
 
 function requireDeviceId(req, res, next) {
   const deviceId = req.headers['x-device-id'];
@@ -34,13 +36,16 @@ router.post(
     try {
       const deviceId = req.deviceId;
       const payload = req.body;
-      const { receipt, fingerprint } = await getOrCreateReceipt(deviceId, payload, deviceId);
+      // Optional email from the frontend; default if missing/invalid.
+      let email = (payload.email || '').trim();
+      if (!email || !isValidEmail(email)) email = `${deviceId}@receiptpro.local`;
+      const receipt = await getOrCreateReceipt(deviceId, payload, deviceId);
 
       const amountKobo = env.RECEIPT_PRICE_KOBO;
       const reference = uniqueRef(receipt.id);
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-      // create payment row
+      // create payment row with email
       const { error: perr } = await supabase.from('payments').insert({
         user_id: deviceId,
         receipt_id: receipt.id,
@@ -51,11 +56,12 @@ router.post(
         expires_at: expiresAt,
         raw: null,
         verified_at: null,
+        email,  // <-- store the email
       });
       if (perr) throw perr;
 
       const body = JSON.stringify({
-        email: `${deviceId}@receiptpro.local`,
+        email,
         amount: amountKobo,
         currency: env.PAYSTACK_CURRENCY,
         reference,
@@ -98,11 +104,10 @@ router.get('/verify', async (req, res) => {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'reference is required.' } });
     }
 
-const { data: payment, error: perr } = await supabase
+    const { data: payment, error: perr } = await supabase
       .from('payments')
       .select('*')
       .eq('reference', reference)
-      .eq('user_id', deviceId)
       .maybeSingle();
     if (perr) throw perr;
     if (!payment) {
@@ -145,7 +150,7 @@ const { data: payment, error: perr } = await supabase
 
     const now = new Date().toISOString();
     await supabase.from('payments').update({ status: 'success', verified_at: now, raw: tx }).eq('id', payment.id);
-    await markReceiptPaid(payment.receipt_id, deviceId);
+    await markReceiptPaid(payment.receipt_id, payment.user_id);
 
     return res.status(200).json({ paid: true, receipt_id: payment.receipt_id });
   } catch (err) {

@@ -22,6 +22,7 @@ export const receiptPayloadSchema = z.object({
   pay: z.string().max(200).default(''),
   cur: z.string().max(10).default('₦'),
   items: z.array(itemSchema).max(50).default([]),
+  email: z.string().email().max(254).optional(),
 });
 
 export const slugParamSchema = z.object({
