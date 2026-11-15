@@ -1,10 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const EMAIL_KEY = 'rp_email';
 
 export default function EmailModal({ open, onConfirm, onClose }) {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+
+  const closeModal = useCallback(() => {
+    setEmail('');
+    setError('');
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) {
@@ -15,6 +21,15 @@ export default function EmailModal({ open, onConfirm, onClose }) {
     const saved = window.localStorage.getItem(EMAIL_KEY);
     if (saved) setEmail(saved);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') closeModal();
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [open, closeModal]);
 
   const validate = (value) => {
     if (!value.trim()) return 'Email is required';
@@ -43,12 +58,25 @@ export default function EmailModal({ open, onConfirm, onClose }) {
     if (e.key === 'Enter' && !error) handleSubmit();
   };
 
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) closeModal();
+  };
+
+  if (!open) return null;
+
   return (
-    <div className="pw" role="dialog" aria-modal="true" aria-label="Enter your email">
+    <div
+      className="pw"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Enter your email"
+      onClick={handleBackdropClick}
+      style={{ zIndex: 50 }}
+    >
       <div className="pbox">
         <div className="phead">
           <b>Enter your email</b>
-          <button type="button" className="x" aria-label="Cancel" onClick={onClose}>&times;</button>
+          <button type="button" className="x" aria-label="Close" onClick={closeModal}>&times;</button>
         </div>
 
         <p className="mut">We need your email to initialize Paystack payment. It will be saved for future use.</p>
@@ -83,7 +111,7 @@ export default function EmailModal({ open, onConfirm, onClose }) {
           >
             Continue to payment
           </button>
-          <button type="button" className="btn alt" onClick={onClose}>
+          <button type="button" className="btn alt" onClick={closeModal}>
             Cancel
           </button>
         </div>
