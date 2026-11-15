@@ -5,48 +5,55 @@ import { supabase } from '../lib/supabase.js';
 import { validate } from '../middleware/validate.js';
 import { receiptPayloadSchema } from '../lib/schemas.js';
 import { getOrCreateReceipt, publicImageUrl } from '../lib/receipts.js';
-import auth from '../middleware/auth.js';
 import { logger } from '../lib/logger.js';
 
 const upload = multer({ limits: { fileSize: 2 * 1024 * 1024 } });
 
+function requireDeviceId(req, res, next) {
+  const deviceId = req.headers['x-device-id'];
+  if (!deviceId) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'x-device-id header required.' } });
+  }
+  req.deviceId = deviceId;
+  next();
+}
+
 const router = Router();
 
-// create / refresh a receipt (requires login + device)
-router.post('/check', auth, validate(receiptPayloadSchema, 'body'), async (req, res) => {
+// create / refresh a receipt (device-scoped)
+router.post('/check', requireDeviceId, validate(receiptPayloadSchema, 'body'), async (req, res) => {
   try {
-    const userId = req.user.id;
-    const deviceId = req.headers['x-device-id'];
-    const { receipt } = await getOrCreateReceipt(userId, req.body, deviceId);
+    const deviceId = req.deviceId;
+    const { receipt } = await getOrCreateReceipt(deviceId, req.body, deviceId);
     const imgUrl = await publicImageUrl(receipt.image_path);
     res.status(200).json({ paid: receipt.status === 'paid', receipt: { id: receipt.id, slug: receipt.slug, image_url: imgUrl, total: receipt.total, currency: receipt.currency, store_name: receipt.store_name } });
   } catch (err) {
-    logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id } }, 'Receipt check failed');
+    logger.error({ err, req: { method: req.method, path: req.path, deviceId: req.deviceId } }, 'Receipt check failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not check receipt status.' } });
   }
 });
 
-// upload image onto a paid receipt (requires login + device)
-router.post('/:id/image', auth, upload.single('image'), async (req, res) => {
+// upload image onto a paid receipt (device-scoped)
+router.post('/:id/image', requireDeviceId, upload.single('image'), async (req, res) => {
   try {
-    const userId = req.user.id;
+    const deviceId = req.deviceId;
     const { id } = req.params;
     if (!req.file) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Image file is required.' } });
     }
     const { data: receipt, error: rerr } = await supabase
       .from('receipts')
-      .select('id, user_id, status, image_path')
+      .select('id, device_id, status, image_path')
       .eq('id', id)
       .maybeSingle();
     if (rerr) throw rerr;
     if (!receipt) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receipt not found.' } });
-    if (receipt.user_id !== userId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not your receipt.' } });
+    if (receipt.device_id !== deviceId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not your receipt.' } });
     if (receipt.status !== 'paid') return res.status(403).json({ error: { code: 'NOT_PAID', message: 'Receipt is not paid.' } });
 
     const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
-    const path = `${userId}/${Date.now()}.${ext}`;
+    const path = `${deviceId}/${Date.now()}.${ext}`;
 
     const { error: uerr } = await supabase.storage
       .from(env.SUPABASE_STORAGE_BUCKET)
@@ -61,7 +68,7 @@ router.post('/:id/image', auth, upload.single('image'), async (req, res) => {
 
     res.status(200).json({ ok: true, path });
   } catch (err) {
-    logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id, receiptId: req.params.id } }, 'Image upload to Supabase Storage failed');
+    logger.error({ err, req: { method: req.method, path: req.path, deviceId: req.deviceId, receiptId: req.params.id } }, 'Image upload to Supabase Storage failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Image upload failed.' } });
   }
 });
@@ -102,7 +109,7 @@ router.get('/:id/download', async (req, res) => {
     const { id } = req.params;
     const deviceId = req.headers['x-device-id'];
     if (!deviceId) {
-      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'device header required.' } });
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'x-device-id header required.' } });
     }
     const { data: receipt, error } = await supabase
       .from('receipts')
