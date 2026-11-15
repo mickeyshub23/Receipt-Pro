@@ -4,7 +4,7 @@ import { env } from '../config/env.js';
 import { supabase } from '../lib/supabase.js';
 import { validate } from '../middleware/validate.js';
 import { receiptPayloadSchema } from '../lib/schemas.js';
-import { getOrCreateReceipt, signedImageUrl } from '../lib/receipts.js';
+import { getOrCreateReceipt, publicImageUrl } from '../lib/receipts.js';
 import { logger } from '../lib/logger.js';
 
 const upload = multer({ limits: { fileSize: 2 * 1024 * 1024 } });
@@ -15,7 +15,8 @@ router.post('/check', validate(receiptPayloadSchema, 'body'), async (req, res) =
   try {
     const userId = req.user.id;
     const { receipt } = await getOrCreateReceipt(userId, req.body);
-    res.status(200).json({ paid: receipt.status === 'paid', receipt: { id: receipt.id, slug: receipt.slug } });
+    const imgUrl = await publicImageUrl(receipt.image_path);
+    res.status(200).json({ paid: receipt.status === 'paid', receipt: { id: receipt.id, slug: receipt.slug, image_url: imgUrl, total: receipt.total, currency: receipt.currency, store_name: receipt.store_name } });
   } catch (err) {
     logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id } }, 'Receipt check failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not check receipt status.' } });
@@ -41,16 +42,16 @@ router.post('/:id/image', upload.single('image'), async (req, res) => {
 
     const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
-    const path = `${userId}/${id}.${ext}`;
+    const path = `${userId}/${Date.now()}.${ext}`;
 
     const { error: uerr } = await supabase.storage
       .from(env.SUPABASE_STORAGE_BUCKET)
-      .upload(path, req.file.buffer, { contentType, upsert: true });
+      .upload(path, req.file.buffer, { contentType, upsert: false });
     if (uerr) throw uerr;
 
     const { error: uperr } = await supabase
       .from('receipts')
-      .update({ image_path: path })
+      .update({ image_path: path, image_url: await publicImageUrl(path) })
       .eq('id', id);
     if (uperr) throw uperr;
 
@@ -65,28 +66,23 @@ router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
     const { style, limit = 20, cursor } = req.query;
+    const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
     let query = supabase
       .from('receipts')
-      .select('id, style, theme, store_name, total, currency, image_path, created_at')
+      .select('id, style, store_name, total, currency, image_url, created_at')
       .eq('user_id', userId)
       .eq('status', 'paid')
       .order('created_at', { ascending: false })
-      .limit(Number(limit));
+      .range(0, limitNum - 1);
     if (style === 'business' || style === 'invoice') query = query.eq('style', style);
     if (cursor) query = query.lt('created_at', cursor);
 
     const { data, error } = await query;
     if (error) throw error;
 
-    const nextCursor = data.length === Number(limit) ? data[data.length - 1].created_at : null;
-    const rows = await Promise.all(
-      data.map(async (r) => ({
-        ...r,
-        image_url: await signedImageUrl(r.image_path),
-      })),
-    );
-
-    res.status(200).json({ receipts: rows, nextCursor });
+    const nextCursor = data.length === limitNum ? data[data.length - 1].created_at : null;
+    // image_url is already stored in the DB (public bucket), so no storage calls needed.
+    res.status(200).json({ receipts: data, nextCursor });
   } catch (err) {
     logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id } }, 'Receipt history load failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not load history.' } });

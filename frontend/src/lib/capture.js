@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import imageCompression from 'browser-image-compression';
 
 export function waitForFonts() {
   if (document.fonts && document.fonts.ready) return document.fonts.ready;
@@ -54,4 +55,26 @@ export function canvasToJpegBlob(canvas, quality = 0.7) {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality);
   });
+}
+
+/**
+ * Compress a File/Blob to under ~300 KB and max 1280 px wide.
+ * Returns a Promise<File>.
+ */
+export async function compressImage(file, maxSizeKb = 300, maxWidth = 1280) {
+  const options = {
+    maxSizeMB: maxSizeKb / 1024,
+    maxWidthOrHeight: maxWidth,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+    initialQuality: 0.75,
+  };
+  try {
+    const compressed = await imageCompression(file, options);
+    return new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+  } catch (e) {
+    // Fall back to the original file if compression fails.
+    console.warn('Image compression failed, using original:', e);
+    return file;
+  }
 }

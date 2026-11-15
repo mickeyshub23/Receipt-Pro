@@ -25,6 +25,7 @@ export async function findReceipt(userId, fingerprint) {
 
 export async function createReceipt(userId, payload, fingerprint) {
   const slug = makeSlug(24);
+  const imageUrl = payload.image_url || null;
   const { data, error } = await supabase
     .from('receipts')
     .insert({
@@ -38,6 +39,7 @@ export async function createReceipt(userId, payload, fingerprint) {
       currency: payload.cur || '₦',
       payload,
       status: 'pending',
+      image_url: imageUrl,
     })
     .select('*')
     .single();
@@ -48,9 +50,20 @@ export async function createReceipt(userId, payload, fingerprint) {
 export async function getOrCreateReceipt(userId, payload) {
   const fingerprint = computeFingerprint(payload);
   let receipt = await findReceipt(userId, fingerprint);
+  const total = totalOf(payload.items, payload.style);
   if (!receipt) {
     receipt = await createReceipt(userId, payload, fingerprint);
+    return { receipt, fingerprint };
   }
+  // Refresh total + currency on every check so old rows never show ₦0.00.
+  const { error: uerr } = await supabase
+    .from('receipts')
+    .update({ total, currency: payload.cur || '₦', payload })
+    .eq('id', receipt.id);
+  if (uerr) throw uerr;
+  receipt.total = total;
+  receipt.currency = payload.cur || '₦';
+  receipt.payload = payload;
   return { receipt, fingerprint };
 }
 
@@ -65,10 +78,33 @@ export async function markReceiptPaid(receiptId) {
   return data;
 }
 
+export async function setImageUrl(receiptId, imageUrl) {
+  const { data, error } = await supabase
+    .from('receipts')
+    .update({ image_url: imageUrl })
+    .eq('id', receiptId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function publicImageUrl(path) {
+  if (!path) return null;
+  const { data, error } = await supabase.storage
+    .from(process.env.SUPABASE_STORAGE_BUCKET || 'receipts')
+    .getPublicUrl(path);
+  if (error) {
+    logger.error({ error, path }, 'Supabase storage publicUrl failed');
+    return null;
+  }
+  return data.publicUrl;
+}
+
 export async function signedImageUrl(path, expiresIn = 600) {
   if (!path) return null;
   const { data, error } = await supabase.storage
-    .from(process.env.SUPABASE_STORAGE_BUCKET || 'receipt-images')
+    .from(process.env.SUPABASE_STORAGE_BUCKET || 'receipts')
     .createSignedUrl(path, expiresIn);
   if (error) {
     logger.error(

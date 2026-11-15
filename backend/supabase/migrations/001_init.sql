@@ -17,6 +17,7 @@ create table receipts (
   currency text not null,
   payload jsonb not null default '{}',
   image_path text,
+  image_url text,
   status text not null default 'pending' check (status in ('pending','paid')),
   created_at timestamptz not null default now(),
   unique (user_id, fingerprint)

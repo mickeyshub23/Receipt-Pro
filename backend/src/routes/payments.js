@@ -12,8 +12,9 @@ function paystackUrl(path) {
   return `https://api.paystack.co${path}`;
 }
 
-function uniqueRef() {
-  return `rcp_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+function uniqueRef(receiptId) {
+  const shortId = receiptId ? String(receiptId).slice(0, 8) : 'new';
+  return `rcp_${shortId}_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
 router.post(
@@ -26,7 +27,7 @@ router.post(
       const { receipt, fingerprint } = await getOrCreateReceipt(userId, payload);
 
       const amountKobo = env.RECEIPT_PRICE_KOBO;
-      const reference = uniqueRef();
+      const reference = uniqueRef(receipt.id);
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
       // create payment row

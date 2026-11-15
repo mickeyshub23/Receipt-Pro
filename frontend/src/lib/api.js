@@ -1,3 +1,5 @@
+import { supabase } from '../lib/supabase.js';
+
 const API = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
 function headers(token) {
@@ -32,6 +34,15 @@ async function request(path, { method = 'GET', body, token } = {}) {
   return data;
 }
 
+async function uploadToReceiptsBucket(file, userId) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${userId}/${Date.now()}.${ext}`;
+  const { data, error } = await supabase.storage.from('receipts').upload(path, file, { upsert: false });
+  if (error) throw error;
+  const { data: publicData } = supabase.storage.from('receipts').getPublicUrl(data.path);
+  return publicData.publicUrl;
+}
+
 export const api = {
   getConfig: () => request('/api/config'),
   checkReceipt: (payload, token) => request('/api/receipts/check', { method: 'POST', body: payload, token }),
@@ -55,6 +66,7 @@ export const api = {
       return data;
     });
   },
+  uploadReceiptImage: uploadToReceiptsBucket,
   getReceipts: ({ style, limit = 20, cursor, token }) => {
     const qs = new URLSearchParams();
     if (style) qs.set('style', style);

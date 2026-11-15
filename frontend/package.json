@@ -9,10 +9,11 @@
   },
   "dependencies": {
     "@fontsource/bricolage-grotesque": "^5.0.0",
-    "@fontsource/instrument-sans": "^5.0.0",
     "@fontsource/courier-prime": "^5.0.0",
+    "@fontsource/instrument-sans": "^5.0.0",
     "@fontsource/kaushan-script": "^5.0.0",
     "@supabase/supabase-js": "^2.45.6",
+    "browser-image-compression": "^2.0.2",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1",
     "qrcode": "^1.5.4",
