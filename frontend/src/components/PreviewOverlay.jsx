@@ -9,6 +9,9 @@ export default function PreviewOverlay({
   theme,
   onTheme,
   paid,
+  checking,
+  verifyError,
+  onRetry,
   onClose,
   onDownload,
   receiptRef,
@@ -24,6 +27,8 @@ export default function PreviewOverlay({
       document.body.style.overflow = '';
     };
   }, [onClose]);
+
+  const locked = checking || Boolean(verifyError);
 
   return (
     <div className="pv" role="dialog" aria-modal="true" aria-label="Receipt preview">
@@ -46,9 +51,21 @@ export default function PreviewOverlay({
           </div>
         </div>
         {paid ? <p className="mut">&#10003; Payment received for this receipt. You can download it again.</p> : null}
+        {verifyError ? (
+          <p className="err">
+            Couldn&apos;t verify payment.
+            <button className="btn alt" style={{ marginLeft: 12, fontSize: 12 }} type="button" onClick={onRetry}>
+              Retry
+            </button>
+          </p>
+        ) : null}
         <div className="dl">
-          <button className="btn" type="button" onClick={() => onDownload('pdf')}>Download PDF</button>
-          <button className="btn alt" type="button" onClick={() => onDownload('png')}>Download image</button>
+          <button className="btn" type="button" disabled={locked} onClick={() => onDownload('pdf')}>
+            {checking ? 'Checking…' : 'Download PDF'}
+          </button>
+          <button className="btn alt" type="button" disabled={locked} onClick={() => onDownload('png')}>
+            {checking ? 'Checking…' : 'Download image'}
+          </button>
         </div>
       </div>
     </div>

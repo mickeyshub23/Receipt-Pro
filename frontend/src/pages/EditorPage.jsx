@@ -41,10 +41,15 @@ export default function EditorPage({ style, onHome }) {
   const [showHistory, setShowHistory] = useState(false);
   const [toast, setToast] = useState('');
   const [publicUrl, setPublicUrl] = useState('');
-  const [paidReceipt, setPaidReceipt] = useState(null);
+  const [verifiedReceipt, setVerifiedReceipt] = useState(null);
+  const [verifyState, setVerifyState] = useState('idle'); // 'idle' | 'checking' | 'error'
+  const [verifyError, setVerifyError] = useState('');
   const receiptRef = useRef(null);
   const pendingKind = useRef('pdf');
   const [modal, setModal] = useState({ open: false, amountLabel: '₦100', expiresAt: '', payUrl: '', status: 'idle', error: '' });
+
+  const paid = verifiedReceipt !== null;
+  const checking = verifyState === 'checking';
 
   useEffect(() => {
     if (style === 2) {
@@ -80,7 +85,6 @@ export default function EditorPage({ style, onHome }) {
     try {
       if (receipt && receipt.slug) {
         setPublicUrl(`${PUBLIC_SITE}/r/${receipt.slug}`);
-        // give QR a moment to re-render before capture
         await new Promise((r) => setTimeout(r, 350));
       }
       const canvas = await captureElement(receiptRef.current, 2);
@@ -97,7 +101,6 @@ export default function EditorPage({ style, onHome }) {
           // image upload failure should not stop the download
         }
       }
-      setPaidReceipt(receipt || paidReceipt);
       setToast('');
     } catch (e) {
       setToast('Could not create the file. Check your internet connection and try again.');
@@ -106,22 +109,34 @@ export default function EditorPage({ style, onHome }) {
 
   async function handleDownload(kind) {
     pendingKind.current = kind;
-    if (paidReceipt) {
-      await doCaptureAndDeliver(kind, paidReceipt);
+
+    // Only an explicit server-confirmed paid receipt can be downloaded.
+    if (verifiedReceipt) {
+      await doCaptureAndDeliver(kind, verifiedReceipt);
       return;
     }
     if (!token) {
       setToast('Please log in again.');
       return;
     }
+
+    setVerifyState('checking');
+    setVerifyError('');
     setToast('Checking payment…');
+
     try {
       const res = await api.checkReceipt(payload(), token, deviceId);
-      if (res.paid) {
-        setToast('');
+      setVerifyState('idle');
+      setToast('');
+
+      // paid comes ONLY from the server (receipt.status === 'paid'), never from local state.
+      if (res && res.paid === true && res.receipt) {
+        setVerifiedReceipt(res.receipt);
         await doCaptureAndDeliver(kind, res.receipt);
         return;
       }
+
+      // Unpaid receipt: open Paystack.
       const init = await api.initializePayment(payload(), token, deviceId);
       setModal({
         open: true,
@@ -133,6 +148,8 @@ export default function EditorPage({ style, onHome }) {
       });
       setToast('');
     } catch (e) {
+      setVerifyState('error');
+      setVerifyError('Couldn&apos;t verify payment.');
       setToast(e.message || 'Could not start payment.');
     }
   }
@@ -151,6 +168,12 @@ export default function EditorPage({ style, onHome }) {
     } catch (e) {
       setModal((m) => ({ ...m, status: 'failed', error: e.message }));
     }
+  }
+
+  function onRetry() {
+    setVerifyState('idle');
+    setVerifyError('');
+    handleDownload(pendingKind.current);
   }
 
   return (
@@ -241,7 +264,10 @@ export default function EditorPage({ style, onHome }) {
           fields={{ ...fields, items, publicUrl }}
           theme={theme}
           onTheme={setTheme}
-          paid={Boolean(paidReceipt)}
+          paid={paid}
+          checking={checking}
+          verifyError={verifyError}
+          onRetry={onRetry}
           onClose={() => setShowPreview(false)}
           onDownload={handleDownload}
           receiptRef={receiptRef}
