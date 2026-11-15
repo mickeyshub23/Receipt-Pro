@@ -23,13 +23,14 @@ export async function findReceipt(userId, fingerprint) {
   return data;
 }
 
-export async function createReceipt(userId, payload, fingerprint) {
+export async function createReceipt(userId, payload, fingerprint, deviceId) {
   const slug = makeSlug(24);
   const imageUrl = payload.image_url || null;
   const { data, error } = await supabase
     .from('receipts')
     .insert({
       user_id: userId,
+      device_id: deviceId || null,
       style: payload.style === 2 ? 'invoice' : 'business',
       theme: payload.theme,
       fingerprint,
@@ -47,23 +48,27 @@ export async function createReceipt(userId, payload, fingerprint) {
   return data;
 }
 
-export async function getOrCreateReceipt(userId, payload) {
+export async function getOrCreateReceipt(userId, payload, deviceId) {
   const fingerprint = computeFingerprint(payload);
   let receipt = await findReceipt(userId, fingerprint);
   const total = totalOf(payload.items, payload.style);
   if (!receipt) {
-    receipt = await createReceipt(userId, payload, fingerprint);
+    receipt = await createReceipt(userId, payload, fingerprint, deviceId);
     return { receipt, fingerprint };
   }
   // Refresh total + currency on every check so old rows never show ₦0.00.
+  // If the row predates device tracking, stamp it now so it appears in history.
+  const patch = { total, currency: payload.cur || '₦', payload };
+  if (!receipt.device_id && deviceId) patch.device_id = deviceId;
   const { error: uerr } = await supabase
     .from('receipts')
-    .update({ total, currency: payload.cur || '₦', payload })
+    .update(patch)
     .eq('id', receipt.id);
   if (uerr) throw uerr;
   receipt.total = total;
   receipt.currency = payload.cur || '₦';
   receipt.payload = payload;
+  if (!receipt.device_id && deviceId) receipt.device_id = deviceId;
   return { receipt, fingerprint };
 }
 

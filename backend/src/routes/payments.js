@@ -23,8 +23,9 @@ router.post(
   async (req, res) => {
     try {
       const userId = req.user.id;
+      const deviceId = req.headers['x-device-id'];
       const payload = req.body;
-      const { receipt, fingerprint } = await getOrCreateReceipt(userId, payload);
+      const { receipt, fingerprint } = await getOrCreateReceipt(userId, payload, deviceId);
 
       const amountKobo = env.RECEIPT_PRICE_KOBO;
       const reference = uniqueRef(receipt.id);

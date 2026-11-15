@@ -23,7 +23,7 @@ app.use(
   cors({
     origin: env.FRONTEND_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-device-id'],
   }),
 );
 
@@ -44,7 +44,7 @@ app.use('/health', health);
 app.use('/api/config', config);
 app.use('/api/webhooks', webhooks);
 app.use('/api/payments', paymentLimiter, auth, payments);
-app.use('/api/receipts', auth, receipts);
+app.use('/api/receipts', receipts);
 app.use('/api/public', publicLimiter, publicReceipts);
 
 app.use(errorHandler);

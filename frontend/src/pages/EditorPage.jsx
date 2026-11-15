@@ -6,6 +6,7 @@ import PaymentModal from '../components/PaymentModal';
 import HistoryWindow from '../components/HistoryWindow';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { getDeviceId } from '../lib/device';
 import { captureElement, downloadCanvasPng, canvasToPdf, canvasToJpegBlob } from '../lib/capture';
 import { DEFAULT_THEME } from '../lib/themes';
 
@@ -32,6 +33,7 @@ function initialState(style) {
 export default function EditorPage({ style, onHome }) {
   const { session, displayName, signOut, user } = useAuth();
   const token = session?.access_token;
+  const deviceId = getDeviceId();
   const [fields, setFields] = useState(() => initialState(style));
   const [items, setItems] = useState([{ q: 1, d: '', p: '', x: '' }]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
@@ -90,7 +92,7 @@ export default function EditorPage({ style, onHome }) {
         try {
           const blob = await canvasToJpegBlob(canvas, 0.7);
           const file = new File([blob], 'receipt.jpg', { type: 'image/jpeg' });
-          await api.uploadImage(receipt.id, file, token);
+          await api.uploadImage(receipt.id, file, token, deviceId);
         } catch (e) {
           // image upload failure should not stop the download
         }
@@ -114,13 +116,13 @@ export default function EditorPage({ style, onHome }) {
     }
     setToast('Checking payment…');
     try {
-      const res = await api.checkReceipt(payload(), token);
+      const res = await api.checkReceipt(payload(), token, deviceId);
       if (res.paid) {
         setToast('');
         await doCaptureAndDeliver(kind, res.receipt);
         return;
       }
-      const init = await api.initializePayment(payload(), token);
+      const init = await api.initializePayment(payload(), token, deviceId);
       setModal({
         open: true,
         amountLabel: '₦100',
@@ -137,7 +139,7 @@ export default function EditorPage({ style, onHome }) {
 
   async function startAgain() {
     try {
-      const init = await api.initializePayment(payload(), token);
+      const init = await api.initializePayment(payload(), token, deviceId);
       setModal({
         open: true,
         amountLabel: '₦100',

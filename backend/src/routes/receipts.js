@@ -5,16 +5,19 @@ import { supabase } from '../lib/supabase.js';
 import { validate } from '../middleware/validate.js';
 import { receiptPayloadSchema } from '../lib/schemas.js';
 import { getOrCreateReceipt, publicImageUrl } from '../lib/receipts.js';
+import auth from '../middleware/auth.js';
 import { logger } from '../lib/logger.js';
 
 const upload = multer({ limits: { fileSize: 2 * 1024 * 1024 } });
 
 const router = Router();
 
-router.post('/check', validate(receiptPayloadSchema, 'body'), async (req, res) => {
+// create / refresh a receipt (requires login + device)
+router.post('/check', auth, validate(receiptPayloadSchema, 'body'), async (req, res) => {
   try {
     const userId = req.user.id;
-    const { receipt } = await getOrCreateReceipt(userId, req.body);
+    const deviceId = req.headers['x-device-id'];
+    const { receipt } = await getOrCreateReceipt(userId, req.body, deviceId);
     const imgUrl = await publicImageUrl(receipt.image_path);
     res.status(200).json({ paid: receipt.status === 'paid', receipt: { id: receipt.id, slug: receipt.slug, image_url: imgUrl, total: receipt.total, currency: receipt.currency, store_name: receipt.store_name } });
   } catch (err) {
@@ -23,7 +26,8 @@ router.post('/check', validate(receiptPayloadSchema, 'body'), async (req, res) =
   }
 });
 
-router.post('/:id/image', upload.single('image'), async (req, res) => {
+// upload image onto a paid receipt (requires login + device)
+router.post('/:id/image', auth, upload.single('image'), async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
@@ -62,15 +66,19 @@ router.post('/:id/image', upload.single('image'), async (req, res) => {
   }
 });
 
+// public device-scoped history (no login required)
 router.get('/', async (req, res) => {
   try {
-    const userId = req.user.id;
+    const deviceId = req.headers['x-device-id'];
+    if (!deviceId) {
+      return res.status(200).json({ receipts: [], nextCursor: null });
+    }
     const { style, limit = 20, cursor } = req.query;
     const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
     let query = supabase
       .from('receipts')
-      .select('id, style, store_name, total, currency, image_url, created_at')
-      .eq('user_id', userId)
+      .select('id, style, store_name, total, currency, image_url, payload, created_at')
+      .eq('device_id', deviceId)
       .eq('status', 'paid')
       .order('created_at', { ascending: false })
       .range(0, limitNum - 1);
@@ -81,11 +89,36 @@ router.get('/', async (req, res) => {
     if (error) throw error;
 
     const nextCursor = data.length === limitNum ? data[data.length - 1].created_at : null;
-    // image_url is already stored in the DB (public bucket), so no storage calls needed.
     res.status(200).json({ receipts: data, nextCursor });
   } catch (err) {
-    logger.error({ err, req: { method: req.method, path: req.path, userId: req.user.id } }, 'Receipt history load failed');
+    logger.error({ err, req: { method: req.method, path: req.path, deviceId: req.headers['x-device-id'] } }, 'Receipt history load failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not load history.' } });
+  }
+});
+
+// public download of a receipt image: server checks paid + device ownership
+router.get('/:id/download', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deviceId = req.headers['x-device-id'];
+    if (!deviceId) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'device header required.' } });
+    }
+    const { data: receipt, error } = await supabase
+      .from('receipts')
+      .select('id, status, device_id, image_url, store_name')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!receipt) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receipt not found.' } });
+    if (receipt.status !== 'paid') return res.status(403).json({ error: { code: 'NOT_PAID', message: 'Receipt is not paid.' } });
+    if (receipt.device_id !== deviceId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not your receipt.' } });
+    if (!receipt.image_url) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receipt image not available.' } });
+
+    res.status(200).json({ url: receipt.image_url });
+  } catch (err) {
+    logger.error({ err, req: { method: req.method, path: req.path, receiptId: req.params.id, deviceId: req.headers['x-device-id'] } }, 'Receipt download failed');
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not prepare download.' } });
   }
 });
 

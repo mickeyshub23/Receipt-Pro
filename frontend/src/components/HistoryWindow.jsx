@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../lib/api';
+import { getDeviceId } from '../lib/device';
 
 function firstFive(items) {
   const shown = (items || []).slice(0, 5).map((i) => `${i.q} x ${i.d || 'Item'}`).join(', ');
@@ -13,6 +14,7 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [lightbox, setLightbox] = useState(null);
+  const deviceId = getDeviceId();
 
   const load = useCallback(async () => {
     if (!open) return;
@@ -20,14 +22,14 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
     setError('');
     try {
       const style = filter === 'all' ? undefined : filter === '1' ? 'business' : 'invoice';
-      const data = await api.getReceipts({ style, limit: 50, token });
+      const data = await api.getReceipts({ style, limit: 50, deviceId });
       setList(data.receipts || []);
     } catch (e) {
       setError(e.message || 'Could not load history.');
     } finally {
       setLoading(false);
     }
-  }, [open, filter, token]);
+  }, [open, filter, deviceId]);
 
   useEffect(() => {
     load();
@@ -50,13 +52,13 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
   const nb = list.filter((h) => h.style === 'business').length;
   const ni = list.filter((h) => h.style === 'invoice').length;
 
-  function download(h) {
-    const a = document.createElement('a');
-    a.download = `receipt-${h.id}.jpg`;
-    a.href = h.image_url;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.click();
+  async function download(h) {
+    try {
+      const data = await api.downloadReceipt(h.id, deviceId);
+      window.open(data.url, '_blank');
+    } catch (e) {
+      // silent fallback
+    }
   }
 
   return (
@@ -85,7 +87,11 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
           ))}
         </div>
         {loading ? <p className="mut">Loading…</p> : null}
-        {error ? <p className="err">{error}</p> : null}
+        {error ? <p className="err">Couldn't load history.
+          <button className="btn alt" style={{ marginLeft: 12, fontSize: 12 }} onClick={() => load()}>
+            Retry
+          </button>
+        </p> : null}
         {!loading && !error && list.length === 0 ? (
           <p className="mut">
             {filter === 'all'
@@ -101,7 +107,7 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
               return (
                 <div className="hi" key={h.id}>
                   {h.image_url ? (
-                    <img src={h.image_url} alt="Receipt" onClick={() => setLightbox(h.image_url)} />
+                    <img src={h.image_url} alt="Receipt" onClick={() => setLightbox(h.image_url)} loading="lazy" />
                   ) : (
                     <div className="ph">No image saved</div>
                   )}
@@ -132,7 +138,7 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
       </div>
       {lightbox ? (
         <div className="lightbox" onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="Receipt enlarged" />
+          <img src={lightbox} alt="Receipt enlarged" loading="lazy" />
         </div>
       ) : null}
     </div>
