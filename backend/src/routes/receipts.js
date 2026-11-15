@@ -22,9 +22,12 @@ const router = Router();
 
 // create / refresh a receipt (device-scoped)
 router.post('/check', requireDeviceId, validate(receiptPayloadSchema, 'body'), async (req, res) => {
-  try {
+    try {
     const deviceId = req.deviceId;
     const { receipt } = await getOrCreateReceipt(deviceId, req.body, deviceId);
+    if (!receipt || !receipt.id) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Receipt could not be found or created before checking payment.' } });
+    }
     const imgUrl = await publicImageUrl(receipt.image_path);
     res.status(200).json({ paid: receipt.status === 'paid', receipt: { id: receipt.id, slug: receipt.slug, image_url: imgUrl, total: receipt.total, currency: receipt.currency, store_name: receipt.store_name } });
   } catch (err) {

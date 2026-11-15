@@ -42,6 +42,9 @@ router.post(
       let email = (payload.email || '').trim();
       if (!email || !isValidEmail(email)) email = `${deviceId}@receiptpro.local`;
       const receipt = await getOrCreateReceipt(deviceId, payload, deviceId);
+      if (!receipt || !receipt.id) {
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Receipt could not be found or created before payment.' } });
+      }
 
       const amountKobo = env.RECEIPT_PRICE_KOBO;
       const reference = uniqueRef(receipt.id);

@@ -65,6 +65,12 @@ export default function EditorPage({ style, onHome }) {
   const checking = verifyState === 'checking';
 
   useEffect(() => {
+    // Clear any stale errors/messages and payment state when the receipt style changes.
+    setVerifyState('idle');
+    setVerifyError('');
+    setToast('');
+    setVerifiedReceipt(null);
+    setModal((m) => ({ ...m, open: false, status: 'idle', error: '' }));
     if (style === 2) {
       setFields((f) => ({ ...f, cur: f.cur || '₦' }));
     }
@@ -162,6 +168,13 @@ export default function EditorPage({ style, onHome }) {
       if (res && res.paid === true && res.receipt) {
         setVerifiedReceipt(res.receipt);
         await doCaptureAndDeliver(kind, res.receipt);
+        return;
+      }
+
+      // Guard: only proceed to payment if the receipt was saved with an id.
+      if (!res || !res.receipt || !res.receipt.id) {
+        setVerifyError('Couldn&apos;t save the receipt before payment.');
+        setToast('Could not save the receipt before payment.');
         return;
       }
 
