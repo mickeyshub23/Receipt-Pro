@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function AuthPage({ onLoginReady }) {
-  const { signUp, signIn, loading } = useAuth();
+  const { signUp, signIn, loading: authLoading } = useAuth();
   const [mode, setMode] = useState('up'); // 'up' = create account, 'in' = login
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -10,14 +10,18 @@ export default function AuthPage({ onLoginReady }) {
   const [password2, setPassword2] = useState('');
   const [err, setErr] = useState(null);
   const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (isSubmitting) return;
     setErr(null);
     setNeedsConfirm(false);
     if (!email || email.length < 3) return setErr('Please enter a valid email.');
     if (!password || password.length < 6) return setErr('Password must be at least 6 characters.');
     if (mode === 'up' && password !== password2) return setErr('The two passwords do not match.');
+    
+    setIsSubmitting(true);
     try {
       if (mode === 'up') {
         const { data } = await signUp({ name, email, password });
@@ -31,7 +35,15 @@ export default function AuthPage({ onLoginReady }) {
         await signIn({ email, password });
       }
     } catch (e) {
-      setErr(e.message || 'Auth failed.');
+      const msg = e.message || 'Auth failed.';
+      if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate key') || msg.includes('users_email_partial_key')) {
+        setErr('This email already has an account. Please log in.');
+        setMode('in');
+      } else {
+        setErr(msg);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -43,10 +55,10 @@ export default function AuthPage({ onLoginReady }) {
           {mode === 'up' ? 'Create your account' : 'Log in'}
         </h2>
         <div className="tabs">
-          <button type="button" className="opt" id="tup" aria-pressed={mode === 'up'} onClick={() => setMode('up')}>
+          <button type="button" className="opt" id="tup" aria-pressed={mode === 'up'} onClick={() => !isSubmitting && setMode('up')} disabled={isSubmitting}>
             Create account
           </button>
-          <button type="button" className="opt" id="tin" aria-pressed={mode === 'in'} onClick={() => setMode('in')}>
+          <button type="button" className="opt" id="tin" aria-pressed={mode === 'in'} onClick={() => !isSubmitting && setMode('in')} disabled={isSubmitting}>
             Log in
           </button>
         </div>
@@ -68,8 +80,14 @@ export default function AuthPage({ onLoginReady }) {
           ) : err ? (
             <p id="aerr" className="err" role="alert">{err}</p>
           ) : null}
-          <button type="submit" className="btn" id="asub" style={{ width: '100%' }} disabled={loading}>
-            {mode === 'up' ? 'Create account' : 'Log in'}
+          <button
+            type="submit"
+            className="btn"
+            id="asub"
+            style={{ width: '100%' }}
+            disabled={isSubmitting || authLoading}
+          >
+            {isSubmitting ? 'Please wait…' : (mode === 'up' ? 'Create account' : 'Log in')}
           </button>
         </form>
       </div>
