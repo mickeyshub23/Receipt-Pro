@@ -18,14 +18,32 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-app.use(helmet());
+const vercelOriginRe = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
+const localCorsOrigins = new Set([
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+]);
+
+function corsOrigin(origin, cb) {
+  const configured = env.FRONTEND_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
+  const isAllowed =
+    !origin ||
+    vercelOriginRe.test(origin) ||
+    localCorsOrigins.has(origin) ||
+    configured.includes(origin);
+  cb(null, isAllowed);
+}
+
 app.use(
   cors({
-    origin: env.FRONTEND_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
+    origin: corsOrigin,
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'x-device-id'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   }),
 );
+app.use(helmet());
 
 app.use(
   express.json({
