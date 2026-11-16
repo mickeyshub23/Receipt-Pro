@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { getDeviceId } from '../lib/device';
 
 export default function PaymentCallbackPage() {
   const navigate = useNavigate();
@@ -17,12 +18,13 @@ export default function PaymentCallbackPage() {
     }
     (async () => {
       const token = session?.access_token;
+      const deviceId = getDeviceId();
       if (!token) {
         setState({ verifying: false, error: 'Missing session token. Please sign in again.', done: false });
         return;
       }
       try {
-        const res = await api.verifyPayment(reference, token);
+        const res = await api.verifyPayment(reference, token, deviceId);
         setState({ verifying: false, error: res?.paid ? '' : 'Payment could not be confirmed. Please try again.', done: Boolean(res?.paid) });
       } catch (e) {
         setState({ verifying: false, error: e?.message || 'Payment could not be confirmed.', done: false });

@@ -41,6 +41,7 @@ export async function createReceipt(deviceId, payload, fingerprint) {
       payload,
       status: 'pending',
       image_url: imageUrl,
+      email: payload.email || null,
     })
     .select('*')
     .single();

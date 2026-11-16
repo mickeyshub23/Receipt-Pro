@@ -31,8 +31,9 @@ router.post('/check', requireDeviceId, validate(receiptPayloadSchema, 'body'), a
     const imgUrl = await publicImageUrl(receipt.image_path);
     res.status(200).json({ paid: receipt.status === 'paid', receipt: { id: receipt.id, slug: receipt.slug, image_url: imgUrl, total: receipt.total, currency: receipt.currency, store_name: receipt.store_name } });
   } catch (err) {
-    logger.error({ err, req: { method: req.method, path: req.path, deviceId: req.deviceId } }, 'Receipt check failed');
-    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not check receipt status.' } });
+    const supaError = err && err.message ? { message: err.message, details: err.details, hint: err.hint, code: err.code, position: err.position } : null;
+    logger.error({ err, req: { method: req.method, path: req.path, deviceId: req.deviceId }, supaError }, 'Receipt check failed');
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Could not check receipt status.', ...supaError } });
   }
 });
 

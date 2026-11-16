@@ -1,11 +1,16 @@
 import { supabase } from '../lib/supabase.js';
+import { getDeviceId } from './device.js';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
-function headers({ token, deviceId } = {}) {
-  const h = { 'Content-Type': 'application/json' };
+// Single source of truth for request headers. Every call to the Render API
+// must go through this so x-device-id is always sent.
+function headers({ token, deviceId, json = true } = {}) {
+  const h = {};
+  if (json) h['Content-Type'] = 'application/json';
   if (token) h.Authorization = `Bearer ${token}`;
-  if (deviceId) h['x-device-id'] = deviceId;
+  const id = deviceId || getDeviceId();
+  if (id) h['x-device-id'] = id;
   return h;
 }
 
@@ -48,13 +53,14 @@ export const api = {
   getConfig: () => request('/api/config'),
   checkReceipt: (payload, token, deviceId) => request('/api/receipts/check', { method: 'POST', body: payload, token, deviceId }),
   initializePayment: (payload, token, deviceId) => request('/api/payments/initialize', { method: 'POST', body: payload, token, deviceId }),
-  verifyPayment: (reference, token) => request(`/api/payments/verify?reference=${encodeURIComponent(reference)}`, { token }),
+  verifyPayment: (reference, token, deviceId) => request(`/api/payments/verify?reference=${encodeURIComponent(reference)}`, { token, deviceId }),
   uploadImage: (id, file, token, deviceId) => {
     const fd = new FormData();
     fd.append('image', file);
     return fetch(`${API}/api/receipts/${id}/image`, {
       method: 'POST',
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(deviceId ? { 'x-device-id': deviceId } : {}) },
+      // FormData needs the browser-set multipart boundary, so no Content-Type.
+      headers: headers({ token, deviceId, json: false }),
       body: fd,
     }).then(async (res) => {
       const data = await parse(res);
