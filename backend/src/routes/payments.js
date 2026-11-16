@@ -1,9 +1,7 @@
 import { Router } from 'express';
 import { env } from '../config/env.js';
 import { supabase } from '../lib/supabase.js';
-import { getOrCreateReceipt, markReceiptPaid } from '../lib/receipts.js';
-import { validate } from '../middleware/validate.js';
-import { receiptPayloadSchema } from '../lib/schemas.js';
+import { markReceiptPaid } from '../lib/receipts.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -33,18 +31,33 @@ function uniqueRef(receiptId) {
 router.post(
   '/initialize',
   requireDeviceId,
-  validate(receiptPayloadSchema, 'body'),
   async (req, res) => {
     try {
       const deviceId = req.deviceId;
-      const payload = req.body;
-      // Optional email from the frontend; default if missing/invalid.
-      let email = (payload.email || '').trim();
-      if (!email || !isValidEmail(email)) email = `${deviceId}@receiptpro.local`;
-      const receipt = await getOrCreateReceipt(deviceId, payload, deviceId);
-      if (!receipt || !receipt.id) {
-        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Receipt could not be found or created before payment.' } });
+      const body = req.body || {};
+      // Accept both receiptId (frontend) and receipt_id (server naming).
+      const receiptId = body.receiptId != null ? body.receiptId : body.receipt_id;
+
+      // Validate BEFORE touching the database.
+      if (!receiptId) {
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'receipt_id is required.' } });
       }
+
+      // Verify the receipt exists and belongs to this device.
+      const { data: receipt, error: rerr } = await supabase
+        .from('receipts')
+        .select('id, slug, status, device_id')
+        .eq('id', receiptId)
+        .eq('device_id', deviceId)
+        .maybeSingle();
+      if (rerr) throw rerr;
+      if (!receipt) {
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'receipt_id is required.' } });
+      }
+
+      // Optional email from the frontend; default if missing/invalid.
+      let email = (body.email || '').trim();
+      if (!email || !isValidEmail(email)) email = `${deviceId}@receiptpro.local`;
 
       const amountKobo = env.RECEIPT_PRICE_KOBO;
       const reference = uniqueRef(receipt.id);
@@ -61,11 +74,11 @@ router.post(
         expires_at: expiresAt,
         raw: null,
         verified_at: null,
-        email,  // <-- store the email
+        email,
       });
       if (perr) throw perr;
 
-      const body = JSON.stringify({
+      const paystackBody = JSON.stringify({
         email,
         amount: amountKobo,
         currency: env.PAYSTACK_CURRENCY,
@@ -80,7 +93,7 @@ router.post(
           Authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`,
           'Content-Type': 'application/json',
         },
-        body,
+        body: paystackBody,
       });
       const data = await resp.json();
 
@@ -102,7 +115,7 @@ router.post(
   },
 );
 
-router.get('/verify', async (req, res) => {
+router.get('/verify', requireDeviceId, async (req, res) => {
   try {
     const { reference } = req.query;
     if (!reference || typeof reference !== 'string') {

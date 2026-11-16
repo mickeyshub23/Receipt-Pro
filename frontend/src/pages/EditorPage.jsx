@@ -57,6 +57,7 @@ export default function EditorPage({ style, onHome }) {
   const [savedEmail, setSavedEmail] = useState(() => getSavedEmail());
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailPendingKind, setEmailPendingKind] = useState('pdf');
+  const [pendingReceiptId, setPendingReceiptId] = useState(null);
   const receiptRef = useRef(null);
   const pendingKind = useRef('pdf');
   const [modal, setModal] = useState({ open: false, amountLabel: '₦100', expiresAt: '', payUrl: '', status: 'idle', error: '' });
@@ -65,11 +66,13 @@ export default function EditorPage({ style, onHome }) {
   const checking = verifyState === 'checking';
 
   useEffect(() => {
-    // Clear any stale errors/messages and payment state when the receipt style changes.
+    // Clear stale errors and payment state when the receipt style changes,
+    // and when the page reloads or the editor mounts with a new style.
     setVerifyState('idle');
     setVerifyError('');
     setToast('');
     setVerifiedReceipt(null);
+    setPendingReceiptId(null);
     setModal((m) => ({ ...m, open: false, status: 'idle', error: '' }));
     if (style === 2) {
       setFields((f) => ({ ...f, cur: f.cur || '₦' }));
@@ -128,8 +131,8 @@ export default function EditorPage({ style, onHome }) {
     }
   }
 
-  async function initializePaymentWith(email) {
-    const init = await api.initializePayment({ ...payload(), email }, token, deviceId);
+  async function initializePaymentWith(receiptId, email) {
+    const init = await api.initializePayment({ receiptId, email }, token, deviceId);
     setModal({
       open: true,
       amountLabel: '₦100',
@@ -157,9 +160,10 @@ export default function EditorPage({ style, onHome }) {
 
     setVerifyState('checking');
     setVerifyError('');
-    setToast('Checking payment…');
+    setToast('Saving receipt…');
 
     try {
+      // 1. Save the receipt and get its id (checkReceipt creates or updates the receipt).
       const res = await api.checkReceipt(payload(), token, deviceId);
       setVerifyState('idle');
       setToast('');
@@ -171,25 +175,28 @@ export default function EditorPage({ style, onHome }) {
         return;
       }
 
-      // Guard: only proceed to payment if the receipt was saved with an id.
+      // 2. Guard: if the receipt has no id, stop and show a clear message.
       if (!res || !res.receipt || !res.receipt.id) {
-        setVerifyError('Couldn&apos;t save the receipt before payment.');
-        setToast('Could not save the receipt before payment.');
+        setVerifyError('Save the receipt first.');
+        setToast('Save the receipt first.');
         return;
       }
 
-      // Unpaid receipt: require an email for Paystack before opening payment.
+      // 3. Remember the saved receipt id for the payment route.
+      setPendingReceiptId(res.receipt.id);
+
+      // 4. Ask for email if not already saved.
       if (!savedEmail) {
         setEmailPendingKind(kind);
         setEmailModalOpen(true);
         return;
       }
 
-      await initializePaymentWith(savedEmail);
+      await initializePaymentWith(res.receipt.id, savedEmail);
     } catch (e) {
       setVerifyState('error');
-      setVerifyError('Couldn&apos;t verify payment.');
-      setToast(e.message || 'Could not start payment.');
+      setVerifyError('Could not save the receipt before payment.');
+      setToast(e.message || 'Could not save the receipt before payment.');
     }
   }
 
@@ -198,7 +205,7 @@ export default function EditorPage({ style, onHome }) {
     setEmailModalOpen(false);
     pendingKind.current = emailPendingKind;
     try {
-      await initializePaymentWith(email);
+      await initializePaymentWith(pendingReceiptId, email);
     } catch (e) {
       setToast(e.message || 'Could not start payment.');
     }
@@ -210,7 +217,7 @@ export default function EditorPage({ style, onHome }) {
 
   async function startAgain() {
     try {
-      await initializePaymentWith(savedEmail);
+      await initializePaymentWith(pendingReceiptId, savedEmail);
     } catch (e) {
       setModal((m) => ({ ...m, status: 'failed', error: e.message }));
     }
