@@ -80,9 +80,10 @@ export async function markReceiptPaid(receiptId, deviceId) {
   if (!data || data.device_id !== deviceId) {
     throw new Error('Receipt does not belong to this device.');
   }
+  const now = new Date().toISOString();
   const { data: updated, error: uerr } = await supabase
     .from('receipts')
-    .update({ status: 'paid' })
+    .update({ status: 'paid', paid_at: now })
     .eq('id', receiptId)
     .select('*')
     .single();

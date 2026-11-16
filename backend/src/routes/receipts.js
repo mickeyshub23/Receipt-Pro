@@ -99,6 +99,8 @@ router.get('/', async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
+    // TEMPORARY DEBUG LOG: device_id received and number of rows found.
+    logger.info({ deviceId, count: data.length, style }, 'Receipt history loaded');
     const nextCursor = data.length === limitNum ? data[data.length - 1].created_at : null;
     res.status(200).json({ receipts: data, nextCursor });
   } catch (err) {

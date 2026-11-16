@@ -66,6 +66,7 @@ router.post(
       // create payment row with email
       const { error: perr } = await supabase.from('payments').insert({
         user_id: deviceId,
+        device_id: deviceId,
         receipt_id: receipt.id,
         reference,
         amount_kobo: amountKobo,
@@ -168,7 +169,7 @@ router.get('/verify', requireDeviceId, async (req, res) => {
 
     const now = new Date().toISOString();
     await supabase.from('payments').update({ status: 'success', verified_at: now, raw: tx }).eq('id', payment.id);
-    await markReceiptPaid(payment.receipt_id, payment.user_id);
+    await markReceiptPaid(payment.receipt_id, payment.device_id || payment.user_id);
 
     return res.status(200).json({ paid: true, receipt_id: payment.receipt_id });
   } catch (err) {
