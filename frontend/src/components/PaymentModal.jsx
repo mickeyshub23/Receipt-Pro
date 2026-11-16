@@ -73,9 +73,9 @@ export default function PaymentModal({ open, amountLabel, expiresAt, payUrl, onC
               <div>{PAY_NAME}</div>
             </div>
 
-            <div style={{ marginTop: 12, fontSize: 13, color: '#555', fontStyle: 'italic' }}>
+            <div style={{ marginTop: 12, fontSize: 13, color: 'var(--muted)', fontStyle: 'italic' }}>
               Email: <b>{email || 'not set'}</b>
-              <button type="button" onClick={onChangeEmail} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#007bff', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}>
+              <button type="button" onClick={onChangeEmail} style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}>
                 Change
               </button>
             </div>

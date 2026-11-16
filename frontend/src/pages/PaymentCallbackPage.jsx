@@ -33,6 +33,6 @@ export default function PaymentCallbackPage() {
   }, [params]);
 
   if (state.verifying) return <div style={{ padding: 40, textAlign: 'center' }}>Verifying payment…</div>;
-  if (!state.done) return <div style={{ padding: 40, textAlign: 'center' }}>{state.error || 'Could not confirm payment.'}</div>;
-  return <div style={{ padding: 40, textAlign: 'center' }}>Payment verified. You can now download your receipt.</div>;
+  if (!state.done) return <div style={{ padding: 40, textAlign: 'center', background: 'var(--error-bg)', color: 'var(--error-text)', borderRadius: 'var(--radius-sm)', maxWidth: 480, margin: '0 auto' }}>{state.error || 'Could not confirm payment.'}</div>;
+  return <div style={{ padding: 40, textAlign: 'center', background: 'var(--paid-bg)', color: 'var(--paid-text)', borderRadius: 'var(--radius-sm)', maxWidth: 480, margin: '0 auto' }}>Payment verified. You can now download your receipt.</div>;
 }

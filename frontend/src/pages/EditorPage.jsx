@@ -345,7 +345,7 @@ export default function EditorPage({ style, onHome }) {
       <HistoryWindow open={showHistory} token={token} onClose={() => setShowHistory(false)} />
 
       {toast ? (
-        <div style={{ position: 'fixed', left: 16, right: 16, bottom: 16, background: 'var(--ink)', color: '#fff', padding: '10px 14px', borderRadius: 8, textAlign: 'center', zIndex: 40 }}>
+        <div style={{ position: 'fixed', left: 16, right: 16, bottom: 16, background: 'var(--card)', color: 'var(--text)', padding: '10px 14px', borderRadius: 8, textAlign: 'center', zIndex: 40, border: '1px solid var(--border)', boxShadow: '0 4px 24px rgba(0,0,0,.4)' }}>
           {toast}
         </div>
       ) : null}

@@ -11,7 +11,7 @@ import '@fontsource/courier-prime/400.css';
 import '@fontsource/courier-prime/700.css';
 import '@fontsource/kaushan-script/400.css';
 
-import './styles/tokens.css';
+import './styles/theme.css';
 import './styles/base.css';
 import './styles/components.css';
 

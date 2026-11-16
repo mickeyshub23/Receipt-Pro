@@ -114,7 +114,7 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
                   <div className="hm">
                     <b>{h.store_name}</b>
                     <div style={{ margin: '3px 0' }}>
-                      <span className={`tag ${h.style === 'business' ? 'b' : 'i'}`}>
+                      <span className={`tag ${h.style === 'business' ? 'tag-business' : 'tag-pending'}`}>
                         {h.style === 'business' ? 'BUSINESS RECEIPT' : 'INVOICE RECEIPT'}
                       </span>
                     </div>

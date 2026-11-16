@@ -23,7 +23,7 @@ export default function PublicReceiptPage() {
     <section className="public">
       <div className="banner">{data.store_name}</div>
       <img src={data.image_url} alt="Receipt" />
-      <a href={data.image_url} download style={{ marginTop: 12, display: 'inline-block', color: 'var(--gd)', fontWeight: 600 }}>Download image</a>
+      <a href={data.image_url} download style={{ marginTop: 12, display: 'inline-block', color: 'var(--accent)', fontWeight: 600 }}>Download image</a>
     </section>
   );
 }

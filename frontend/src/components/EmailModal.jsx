@@ -82,21 +82,21 @@ export default function EmailModal({ open, onConfirm, onClose }) {
         <p className="mut">We need your email to initialize Paystack payment. It will be saved for future use.</p>
 
         <label style={{ display: 'block', marginBottom: 8 }}>
-          <span style={{ fontSize: 14, color: '#666' }}>Email address</span>
+          <span style={{ fontSize: 14, color: 'var(--muted)' }}>Email address</span>
           <input
             type="email"
             value={email}
             onChange={handleChange}
             onKeyDown={handleKey}
             placeholder="your.name@example.com"
-            style={{ width: '100%', padding: 10, fontSize: 16, borderRadius: 8, border: error ? '1.5px solid #d00' : '1.5px solid #ccc' }}
+            style={{ width: '100%', padding: 10, fontSize: 16, borderRadius: 8, border: error ? '1.5px solid var(--error-text)' : '1.5px solid var(--border)' }}
             autoFocus
             aria-describedby="email-error"
           />
         </label>
 
         {error ? (
-          <p id="email-error" style={{ color: '#d00', fontSize: 14, marginTop: 4 }}>
+          <p id="email-error" style={{ color: 'var(--error-text)', fontSize: 14, marginTop: 4 }}>
             {error}
           </p>
         ) : null}
@@ -116,7 +116,7 @@ export default function EmailModal({ open, onConfirm, onClose }) {
           </button>
         </div>
 
-        <div style={{ marginTop: 12, fontSize: 12, color: '#666' }}>
+        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--muted)' }}>
           Your email will be saved locally and used for this and future payments.
         </div>
       </div>
