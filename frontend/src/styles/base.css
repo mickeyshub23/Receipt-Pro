@@ -73,6 +73,30 @@ input:focus,select:focus,button:focus-visible,a:focus-visible{outline:2px solid 
 .hbtn{padding:20px;font-size:18px;border-radius:14px}
 .opts.big{gap:16px}
 .opt.big{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px 14px 20px;border-radius:14px;text-align:center}
+
+/* Style selector cards: the dark green container turns white on hover / focus.
+   Wrapped in a padded outer div so the white appears as the cursor approaches. */
+.style-card-wrap{
+  padding: 8px;
+  border-radius: 16px;
+}
+.style-card-wrap .opt.big{
+  transition: background-color .25s ease, border-color .25s ease, color .25s ease;
+}
+@media (hover: hover){
+  .style-card-wrap:hover .opt.big{
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #04120C;
+  }
+  .style-card-wrap:hover .opt.big b{ color: #04120C; }
+}
+.style-card-wrap:focus-within .opt.big{
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #04120C;
+}
+.style-card-wrap:focus-within .opt.big b{ color: #04120C; }
 .opt.big img{width:100%;height:360px;object-fit:contain;background:rgba(31,214,95,0.08);border:1px solid var(--border);border-radius:10px}
 @media(max-width:420px){.opts.big{grid-template-columns:1fr}}
 
