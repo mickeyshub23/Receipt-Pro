@@ -30,6 +30,10 @@
   --button-primary-hover-bg: var(--primary-hover);
   --button-secondary-color: var(--accent);
   --button-secondary-border: var(--accent);
+  --button-hover-bg: #F4F0E6;
+  --button-hover-text: #04120C;
+  --button-hover-border: #F4F0E6;
+  --button-active-bg: #E8E2D2;
 }
 
 html, body {
