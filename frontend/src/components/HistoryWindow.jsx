@@ -13,6 +13,7 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [downloadError, setDownloadError] = useState('');
   const [lightbox, setLightbox] = useState(null);
   const deviceId = getDeviceId();
 
@@ -54,10 +55,10 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
 
   async function download(h) {
     try {
-      const data = await api.downloadReceipt(h.id, deviceId);
-      window.open(data.url, '_blank');
+      await api.downloadReceiptBlob(h.id, deviceId, `receipt-${h.receipt_no || h.id}.png`);
+      setDownloadError('');
     } catch (e) {
-      // silent fallback
+      setDownloadError(e.message || 'Could not download the receipt.');
     }
   }
 
@@ -92,6 +93,7 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
             Retry
           </button>
         </p> : null}
+        {downloadError ? <p className="err">{downloadError}</p> : null}
         {!loading && !error && list.length === 0 ? (
           <p className="mut">
             {filter === 'all'

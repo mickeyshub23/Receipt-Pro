@@ -82,5 +82,31 @@ export const api = {
     return request(`/api/receipts?${qs.toString()}`, { deviceId });
   },
   downloadReceipt: (id, deviceId) => request(`/api/receipts/${encodeURIComponent(id)}/download`, { deviceId }),
+  // Fetch the receipt image as a blob and trigger a browser download.
+  downloadReceiptBlob: async (id, deviceId, filename = 'receipt.png') => {
+    // First get the signed URL from the backend
+    const res = await fetch(`${API}/api/receipts/${encodeURIComponent(id)}/download`, {
+      headers: headers({ deviceId, json: true }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data && data.error && data.error.message) || `Download failed ${res.status}`);
+    }
+    const { url } = await res.json();
+    if (!url) throw new Error('No download URL available');
+
+    // Then fetch the actual image and trigger download
+    const imageRes = await fetch(url);
+    if (!imageRes.ok) throw new Error(`Failed to fetch image: ${imageRes.status}`);
+    const blob = await imageRes.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  },
   getPublicReceipt: (slug) => request(`/api/public/receipts/${encodeURIComponent(slug)}`),
 };
