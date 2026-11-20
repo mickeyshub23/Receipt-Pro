@@ -57,13 +57,30 @@ router.post('/:id/image', requireDeviceId, upload.single('image'), async (req, r
     if (receipt.status !== 'paid') return res.status(403).json({ error: { code: 'NOT_PAID', message: 'Receipt is not paid.' } });
     console.log('[IMAGE-UPLOAD] receipt OK:', receipt.id, 'status:', receipt.status);
 
+    const bucketName = env.SUPABASE_STORAGE_BUCKET || 'receipts';
+
+    // Ensure the bucket exists before uploading.
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some((b) => b.id === bucketName);
+    if (!bucketExists) {
+      console.log('[IMAGE-UPLOAD] creating bucket:', bucketName);
+      const { error: createErr } = await supabase.storage.createBucket(bucketName, { public: true });
+      if (createErr) {
+        console.log('[IMAGE-UPLOAD] create bucket failed:', createErr.message);
+        throw createErr;
+      }
+      console.log('[IMAGE-UPLOAD] bucket created');
+    } else {
+      console.log('[IMAGE-UPLOAD] bucket already exists:', bucketName);
+    }
+
     const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
     const path = `${deviceId}/${Date.now()}.${ext}`;
-    console.log('[IMAGE-UPLOAD] uploading to bucket:', env.SUPABASE_STORAGE_BUCKET, 'path:', path);
+    console.log('[IMAGE-UPLOAD] uploading to bucket:', bucketName, 'path:', path);
 
     const { error: uerr } = await supabase.storage
-      .from(env.SUPABASE_STORAGE_BUCKET)
+      .from(bucketName)
       .upload(path, req.file.buffer, { contentType, upsert: false });
     if (uerr) {
       console.log('[IMAGE-UPLOAD] storage upload failed:', uerr.message);
