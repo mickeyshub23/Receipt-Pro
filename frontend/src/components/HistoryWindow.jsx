@@ -105,7 +105,7 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
         ) : null}
         {!loading
           ? list.map((h) => {
-              const d = new Date(h.created_at);
+              const d = new Date(h.paid_at || h.created_at);
               return (
                 <div className="hi" key={h.id}>
                   {h.image_url ? (
@@ -128,7 +128,7 @@ export default function HistoryWindow({ open, token, onClose, refreshKey }) {
                       Total: {h.currency}
                       {Number(h.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <div className="mut" style={{ margin: 0 }}>You paid ₦100</div>
+                    <div className="mut" style={{ margin: 0 }}>You paid {h.currency}{Number(h.total).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
                     {h.image_url ? (
                       <button type="button" className="btn alt" onClick={() => download(h)}>Download image</button>
                     ) : null}

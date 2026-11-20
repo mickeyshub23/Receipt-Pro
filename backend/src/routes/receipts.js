@@ -103,7 +103,7 @@ router.get('/', async (req, res) => {
     const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
     let query = supabase
       .from('receipts')
-      .select('id, style, store_name, total, currency, image_url, payload, created_at')
+      .select('id, style, store_name, total, currency, image_url, payload, created_at, paid_at')
       .eq('device_id', deviceId)
       .eq('status', 'paid')
       .order('created_at', { ascending: false })
