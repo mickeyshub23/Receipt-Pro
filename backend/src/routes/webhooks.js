@@ -25,7 +25,9 @@ async function markPaid(reference, raw) {
 
   const now = new Date().toISOString();
   await supabase.from('payments').update({ status: 'success', verified_at: now, raw }).eq('id', payment.id);
-  await markReceiptPaid(payment.receipt_id);
+  // Use payment.device_id (or user_id as fallback) to match the receipt's device_id
+  const deviceId = payment.device_id || payment.user_id;
+  await markReceiptPaid(payment.receipt_id, deviceId);
   return { already: false };
 }
 
