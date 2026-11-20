@@ -71,6 +71,7 @@ export async function getOrCreateReceipt(deviceId, payload) {
 }
 
 export async function markReceiptPaid(receiptId, deviceId) {
+  console.log('[RECEIPTS] markReceiptPaid called:', { receiptId, deviceId });
   const { data, error } = await supabase
     .from('receipts')
     .select('device_id')
@@ -88,6 +89,7 @@ export async function markReceiptPaid(receiptId, deviceId) {
     .select('*')
     .single();
   if (uerr) throw uerr;
+  console.log('[RECEIPTS] receipt marked paid:', { id: receiptId, status: updated.status, paid_at: updated.paid_at });
   return updated;
 }
 

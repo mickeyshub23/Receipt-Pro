@@ -30,34 +30,43 @@ async function markPaid(reference, raw) {
 }
 
 router.post('/paystack', async (req, res) => {
+  console.log('[WEBHOOK] received paystack webhook', { headers: Object.keys(req.headers) });
   const signature = req.headers['x-paystack-signature'];
   if (!signature) {
+    console.log('[WEBHOOK] missing x-paystack-signature header');
     return res.status(401).json({ error: { code: 'INVALID_SIGNATURE', message: 'Missing signature.' } });
   }
   const rawBody = req.rawBody;
   if (!rawBody) {
+    console.log('[WEBHOOK] no raw body');
     return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'No body.' } });
   }
 
   if (!paystackVerifySignature(env.PAYSTACK_SECRET_KEY, rawBody, signature)) {
+    console.log('[WEBHOOK] signature mismatch');
     return res.status(401).json({ error: { code: 'INVALID_SIGNATURE', message: 'Signature mismatch.' } });
   }
+  console.log('[WEBHOOK] signature verified');
 
   const event = JSON.parse(rawBody.toString('utf8'));
+  console.log('[WEBHOOK] event type:', event.event);
   if (event.event !== 'charge.success') {
+    console.log('[WEBHOOK] ignoring non-charge.success event:', event.event);
     return res.status(200).json({ ok: true });
   }
 
   const reference = event.data?.reference;
+  console.log('[WEBHOOK] charge.success reference:', reference);
   if (!reference) {
+    console.log('[WEBHOOK] no reference in event data');
     return res.status(200).json({ ok: true });
   }
 
   try {
-    await markPaid(reference, event.data);
+    const result = await markPaid(reference, event.data);
+    console.log('[WEBHOOK] markPaid result:', JSON.stringify(result));
   } catch (err) {
-    // Always answer 200 for valid events so Paystack does not retry forever.
-    // Log the full stack for debugging — webhook data is never echoed to the caller.
+    console.log('[WEBHOOK] markPaid error:', err.message);
     logger.error(
       { err, req: { method: req.method, path: req.path }, reference },
       'Webhook markPaid failed',
