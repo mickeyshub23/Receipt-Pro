@@ -34,5 +34,27 @@ export default function PaymentCallbackPage() {
 
   if (state.verifying) return <div style={{ padding: 40, textAlign: 'center' }}>Verifying payment…</div>;
   if (!state.done) return <div style={{ padding: 40, textAlign: 'center', background: 'var(--error-bg)', color: 'var(--error-text)', borderRadius: 'var(--radius-sm)', maxWidth: 480, margin: '0 auto' }}>{state.error || 'Could not confirm payment.'}</div>;
-  return <div style={{ padding: 40, textAlign: 'center', background: 'var(--paid-bg)', color: 'var(--paid-text)', borderRadius: 'var(--radius-sm)', maxWidth: 480, margin: '0 auto' }}>Payment verified. You can now download your receipt.</div>;
+  return (
+    <div style={{ padding: 40, textAlign: 'center', background: 'var(--paid-bg)', color: 'var(--paid-text)', borderRadius: 'var(--radius-sm)', maxWidth: 480, margin: '0 auto' }}>
+      Payment verified. You can now download your receipt.
+      <div style={{ marginTop: 20, display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="btn"
+          style={{ fontSize: 16, padding: '12px 24px', borderRadius: 'var(--radius-sm)' }}
+          onClick={() => navigate('/app/editor/1')}
+        >
+          Go to my receipt
+        </button>
+        <button
+          type="button"
+          className="btn alt"
+          style={{ fontSize: 16, padding: '12px 24px', borderRadius: 'var(--radius-sm)' }}
+          onClick={() => navigate('/app')}
+        >
+          View History
+        </button>
+      </div>
+    </div>
+  );
 }

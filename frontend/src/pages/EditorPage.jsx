@@ -120,9 +120,11 @@ export default function EditorPage({ style, onHome }) {
         try {
           const blob = await canvasToJpegBlob(canvas, 0.7);
           const file = new File([blob], 'receipt.jpg', { type: 'image/jpeg' });
-          await api.uploadImage(receipt.id, file, token, deviceId);
+          const uploadRes = await api.uploadImage(receipt.id, file, token, deviceId);
+          console.log('[EDITOR] image uploaded:', uploadRes);
         } catch (e) {
           // image upload failure should not stop the download
+          console.log('[EDITOR] image upload failed:', e.message, e);
         }
       }
       setToast('');
