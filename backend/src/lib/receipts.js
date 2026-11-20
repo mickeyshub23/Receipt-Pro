@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { env } from '../config/env.js';
 import { computeFingerprint } from './fingerprint.js';
 import { makeSlug } from './slug.js';
 import { logger } from './logger.js';
@@ -107,7 +108,7 @@ export async function setImageUrl(receiptId, imageUrl) {
 export async function publicImageUrl(path) {
   if (!path) return null;
   const { data, error } = await supabase.storage
-    .from(process.env.SUPABASE_STORAGE_BUCKET || 'receipts')
+    .from(env.SUPABASE_STORAGE_BUCKET)
     .getPublicUrl(path);
   if (error) {
     logger.error({ error, path }, 'Supabase storage publicUrl failed');
@@ -119,7 +120,7 @@ export async function publicImageUrl(path) {
 export async function signedImageUrl(path, expiresIn = 600) {
   if (!path) return null;
   const { data, error } = await supabase.storage
-    .from(process.env.SUPABASE_STORAGE_BUCKET || 'receipts')
+    .from(env.SUPABASE_STORAGE_BUCKET)
     .createSignedUrl(path, expiresIn);
   if (error) {
     logger.error(

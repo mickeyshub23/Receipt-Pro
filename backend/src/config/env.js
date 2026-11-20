@@ -8,7 +8,7 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
   SUPABASE_SECRET_KEY: z.string().min(1),
-  SUPABASE_STORAGE_BUCKET: z.string().default('receipt-images'),
+  SUPABASE_STORAGE_BUCKET: z.string().default('receipts'),
   PAYSTACK_SECRET_KEY: z.string().min(1),
   PAYSTACK_CALLBACK_URL: z.string().url(),
   RECEIPT_PRICE_KOBO: z.coerce.number().int().min(1).default(10000),
