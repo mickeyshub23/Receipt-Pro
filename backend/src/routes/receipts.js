@@ -42,6 +42,7 @@ router.post('/:id/image', requireDeviceId, upload.single('image'), async (req, r
   try {
     const deviceId = req.deviceId;
     const { id } = req.params;
+    console.log('[IMAGE-UPLOAD] received upload for receipt:', id, 'device:', deviceId);
     if (!req.file) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Image file is required.' } });
     }
@@ -54,24 +55,38 @@ router.post('/:id/image', requireDeviceId, upload.single('image'), async (req, r
     if (!receipt) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receipt not found.' } });
     if (receipt.device_id !== deviceId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not your receipt.' } });
     if (receipt.status !== 'paid') return res.status(403).json({ error: { code: 'NOT_PAID', message: 'Receipt is not paid.' } });
+    console.log('[IMAGE-UPLOAD] receipt OK:', receipt.id, 'status:', receipt.status);
 
     const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
     const path = `${deviceId}/${Date.now()}.${ext}`;
+    console.log('[IMAGE-UPLOAD] uploading to bucket:', env.SUPABASE_STORAGE_BUCKET, 'path:', path);
 
     const { error: uerr } = await supabase.storage
       .from(env.SUPABASE_STORAGE_BUCKET)
       .upload(path, req.file.buffer, { contentType, upsert: false });
-    if (uerr) throw uerr;
+    if (uerr) {
+      console.log('[IMAGE-UPLOAD] storage upload failed:', uerr.message);
+      throw uerr;
+    }
+    console.log('[IMAGE-UPLOAD] uploaded to storage');
+
+    const publicUrl = await publicImageUrl(path);
+    console.log('[IMAGE-UPLOAD] public URL:', publicUrl);
 
     const { error: uperr } = await supabase
       .from('receipts')
-      .update({ image_path: path, image_url: await publicImageUrl(path) })
+      .update({ image_path: path, image_url: publicUrl })
       .eq('id', id);
-    if (uperr) throw uperr;
+    if (uperr) {
+      console.log('[IMAGE-UPLOAD] DB update failed:', uperr.message);
+      throw uperr;
+    }
+    console.log('[IMAGE-UPLOAD] receipt updated with image_url');
 
     res.status(200).json({ ok: true, path });
   } catch (err) {
+    console.log('[IMAGE-UPLOAD] error:', err.message);
     logger.error({ err, req: { method: req.method, path: req.path, deviceId: req.deviceId, receiptId: req.params.id } }, 'Image upload to Supabase Storage failed');
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Image upload failed.' } });
   }
